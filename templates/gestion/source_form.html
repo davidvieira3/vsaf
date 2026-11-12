@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{% if source %}{{ source.name }}{% else %}Nouvelle source{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{% if source %}Source {{ source.name }}{% else %}Nouvelle source{% endif %}</h1>
+  <p>Utilisez un compte en lecture seule : rôle « Lecture seule » propagé depuis la racine du vCenter, ou rôle PVEAuditor sur « / » pour Proxmox.</p></div>
+  <div class="actions"><a class="btn" href="{% url 'gestion:sources' %}">Retour</a></div>
+</div>
+<form method="post" class="form" novalidate>
+  {% csrf_token %}
+  {% if form.non_field_errors %}<ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+  {% for legend, hint, fields in groups %}
+  <fieldset><legend>{{ legend }}</legend>
+    {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+    {% for field in fields %}{% include "gestion/_field.html" %}{% endfor %}
+  </fieldset>
+  {% endfor %}
+  <div class="actions">
+    <button class="btn primary" type="submit">Enregistrer</button>
+    <button class="btn" type="submit" name="save_test" value="1">Enregistrer et tester la connexion</button>
+  </div>
+</form>
+{% endblock %}

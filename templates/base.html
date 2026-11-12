@@ -1,0 +1,70 @@
+{% load static %}<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Inventaire{% endblock %} · Inventaire infra</title>
+<link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+<link rel="stylesheet" href="{% static 'vendor/tabulator.min.css' %}">
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
+{% block head %}{% endblock %}
+</head>
+<body>
+<div class="shell">
+  <nav class="side" aria-label="Navigation principale">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#0b7a75"/><g fill="#fff"><rect x="7" y="7" width="18" height="4" rx="1"/><rect x="7" y="14" width="18" height="4" rx="1"/><rect x="7" y="21" width="18" height="4" rx="1"/></g></svg>
+      Inventaire infra
+    </div>
+    {% with path=request.path %}
+    <a href="{% url 'inventory:dashboard' %}" {% if path == '/' %}aria-current="page"{% endif %}>Vue d'ensemble</a>
+    <h2>Inventaire</h2>
+    <a href="{% url 'inventory:grid' 'sources' %}" {% if path == '/vue/sources/' %}aria-current="page"{% endif %}>vCenter &amp; Proxmox</a>
+    <a href="{% url 'inventory:grid' 'clusters' %}" {% if path == '/vue/clusters/' %}aria-current="page"{% endif %}>Clusters</a>
+    <a href="{% url 'inventory:grid' 'hosts' %}" {% if path == '/vue/hosts/' %}aria-current="page"{% endif %}>Hôtes</a>
+    <a href="{% url 'inventory:grid' 'datastores' %}" {% if path == '/vue/datastores/' %}aria-current="page"{% endif %}>Stockage</a>
+    <a href="{% url 'inventory:grid' 'switches' %}" {% if path == '/vue/switches/' %}aria-current="page"{% endif %}>Commutateurs virtuels</a>
+    <a href="{% url 'inventory:grid' 'portgroups' %}" {% if path == '/vue/portgroups/' %}aria-current="page"{% endif %}>Portgroups &amp; VLAN</a>
+    <a href="{% url 'inventory:grid' 'neighbors' %}" {% if path == '/vue/neighbors/' %}aria-current="page"{% endif %}>CDP / LLDP</a>
+    <a href="{% url 'inventory:grid' 'vms' %}" {% if path == '/vue/vms/' %}aria-current="page"{% endif %}>Machines virtuelles</a>
+    <h2>Stockage</h2>
+    <a href="{% url 'inventory:grid' 'arrays' %}" {% if path == '/vue/arrays/' %}aria-current="page"{% endif %}>Baies</a>
+    <a href="{% url 'inventory:grid' 'pools' %}" {% if path == '/vue/pools/' %}aria-current="page"{% endif %}>Pools &amp; agrégats</a>
+    <a href="{% url 'inventory:grid' 'volumes' %}" {% if path == '/vue/volumes/' %}aria-current="page"{% endif %}>Volumes &amp; LUN</a>
+    <h2>Exports</h2>
+    <a href="{% url 'inventory:workbook' %}">Classeur Excel actuel</a>
+    <a href="{% url 'gestion:history' %}" {% if '/gestion/historique' in path %}aria-current="page"{% endif %}>Historique Excel</a>
+    {% if is_operator %}
+    <h2>Gestion</h2>
+    <a href="{% url 'gestion:sources' %}" {% if '/gestion/sources' in path %}aria-current="page"{% endif %}>Sources</a>
+    <a href="{% url 'gestion:runs' %}" {% if '/gestion/collectes' in path %}aria-current="page"{% endif %}>Collectes</a>
+    <a href="{% url 'gestion:storage' %}" {% if '/gestion/baies' in path %}aria-current="page"{% endif %}>Baies de stockage</a>
+    <a href="{% url 'gestion:connectors' %}" {% if '/gestion/materiel' in path %}aria-current="page"{% endif %}>Matériel (iDRAC, iLO…)</a>
+    <a href="{% url 'gestion:cmdb' %}" {% if '/gestion/servicenow' in path %}aria-current="page"{% endif %}>ServiceNow</a>
+    {% endif %}
+    {% if is_admin %}
+    <a href="{% url 'accounts:users' %}" {% if '/comptes/utilisateurs' in path %}aria-current="page"{% endif %}>Utilisateurs</a>
+    <a href="{% url 'accounts:realms' %}" {% if '/comptes/domaines' in path %}aria-current="page"{% endif %}>Active Directory</a>
+    <a href="{% url 'gestion:settings' %}" {% if '/gestion/parametres' in path %}aria-current="page"{% endif %}>Paramètres</a>
+    <a href="{% url 'gestion:audit' %}" {% if '/gestion/journal' in path %}aria-current="page"{% endif %}>Journal d'audit</a>
+    <a href="{% url 'gestion:system' %}" {% if '/gestion/systeme' in path %}aria-current="page"{% endif %}>Système</a>
+    {% endif %}
+    {% endwith %}
+    <div class="who">
+      <strong>{{ user.first_name|default:user.username }}</strong>
+      {{ user.username }} · {{ current_role|default:"" }}
+      <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}
+        <button class="linkish" type="submit">Se déconnecter</button>
+        {% if not user.profile.realm_id %} · <a href="{% url 'accounts:password' %}" style="color:inherit">Mot de passe</a>{% endif %}
+      </form>
+    </div>
+  </nav>
+  <main id="main">
+    {% if messages %}<ul class="messages">{% for m in messages %}<li class="{{ m.tags }}">{{ m }}</li>{% endfor %}</ul>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script src="{% static 'js/app.js' %}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

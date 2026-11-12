@@ -1,0 +1,58 @@
+{% extends "base.html" %}{% load humanize %}
+{% block title %}Sources{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Sources</h1><p>Les vCenter et clusters Proxmox interrogés. Chaque source est collectée à son rythme par les workers, en parallèle.</p></div>
+  <div class="actions">
+    {% if is_admin %}
+    <a class="btn primary" href="{% url 'gestion:source_create' %}">Ajouter une source</a>
+    <a class="btn" href="{% url 'gestion:sources_import' %}">Importer en masse</a>
+    {% endif %}
+    <form method="post" action="{% url 'gestion:collect_all' %}" class="inline" data-confirm="Lancer la collecte de toutes les sources actives ?">{% csrf_token %}
+      <button class="btn" type="submit">Collecter tout</button></form>
+  </div>
+</div>
+<form class="toolbar" method="get">
+  <div class="segmented" role="group" aria-label="Plateforme">
+    <button name="platform" value="" aria-pressed="{% if not platform %}true{% else %}false{% endif %}">Tout</button>
+    <button name="platform" value="vmware" aria-pressed="{% if platform == 'vmware' %}true{% else %}false{% endif %}">VMware</button>
+    <button name="platform" value="proxmox" aria-pressed="{% if platform == 'proxmox' %}true{% else %}false{% endif %}">Proxmox</button>
+  </div>
+  <div class="grow"><input type="search" name="q" value="{{ q }}" placeholder="Nom, adresse ou site" aria-label="Rechercher"></div>
+</form>
+<div class="panel table-wrap">
+<table class="plain">
+  <thead><tr><th>Nom</th><th>Plateforme</th><th>Adresse</th><th>Site</th><th>Version</th><th class="num">Hôtes</th><th class="num">VM</th>
+    <th>Dernière collecte</th><th>Prochaine</th><th class="num">Durée</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for s in sources %}
+    <tr>
+      <td>{% if is_admin %}<a href="{% url 'gestion:source_edit' s.pk %}">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}
+        {% if not s.enabled %}<span class="pill">désactivée</span>{% endif %}</td>
+      <td><span class="tag {{ s.platform }}">{{ s.get_platform_display }}</span></td>
+      <td class="mono">{{ s.host }}:{{ s.port }}</td>
+      <td>{{ s.site }}</td>
+      <td>{{ s.version }}{% if s.build %} <span class="hint">({{ s.build }})</span>{% endif %}</td>
+      <td class="num">{{ s.num_hosts }}</td>
+      <td class="num">{{ s.num_vms|intcomma }}</td>
+      <td>{% if s.last_status %}<span class="pill {{ s.last_status }}" title="{{ s.last_error }}">{{ s.last_status }}</span>{% endif %}
+        <span class="hint">{{ s.last_run_at|naturaltime|default:"jamais" }}</span></td>
+      <td class="hint">{% if s.enabled %}{{ s.next_run_at|naturaltime|default:"dès que possible" }}{% else %}—{% endif %}</td>
+      <td class="num">{% if s.last_duration_s %}{{ s.last_duration_s|floatformat:0 }} s{% endif %}</td>
+      <td class="actions">
+        <a class="btn small" href="{% url 'gestion:source_test' s.pk %}">Tester</a>
+        <form method="post" action="{% url 'gestion:source_collect' s.pk %}" class="inline">{% csrf_token %}<button class="btn small" type="submit">Collecter</button></form>
+        <a class="btn small" href="{% url 'inventory:grid' 'hosts' %}?source={{ s.pk }}">Hôtes</a>
+        {% if is_admin %}
+        <form method="post" action="{% url 'gestion:source_toggle' s.pk %}" class="inline">{% csrf_token %}<button class="btn small" type="submit">{% if s.enabled %}Désactiver{% else %}Activer{% endif %}</button></form>
+        <form method="post" action="{% url 'gestion:source_delete' s.pk %}" class="inline" data-confirm="Supprimer {{ s.name }} et tout son inventaire ?">{% csrf_token %}<button class="btn small danger" type="submit">Supprimer</button></form>
+        {% endif %}
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="11" class="hint">Aucune source. {% if is_admin %}<a href="{% url 'gestion:source_create' %}">Ajoutez un premier vCenter ou cluster Proxmox</a>, ou importez-en plusieurs d'un coup.{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

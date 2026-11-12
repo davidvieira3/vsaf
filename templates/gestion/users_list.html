@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Utilisateurs{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Utilisateurs</h1><p>Lecture : consulter et exporter. Opérateur : lancer des collectes et tester les connexions. Administrateur : tout le reste.</p></div>
+  <div class="actions"><a class="btn primary" href="{% url 'accounts:user_create' %}">Créer un compte local</a></div>
+</div>
+<div class="panel table-wrap">
+<table class="plain">
+  <thead><tr><th>Identifiant</th><th>Nom</th><th>Origine</th><th>Rôle</th><th>Actif</th><th>Dernière connexion</th><th>Actions</th></tr></thead>
+  <tbody>{% for u in users %}<tr>
+    <td><a href="{% url 'accounts:user_edit' u.pk %}">{{ u.username }}</a></td>
+    <td>{{ u.profile.display_name|default:u.first_name }}</td>
+    <td>{% if u.profile.realm %}AD {{ u.profile.realm.name }}{% else %}local{% endif %}</td>
+    <td>{% if u.is_superuser %}administrateur (super){% else %}{{ u.profile.get_role_display|default:"lecture" }}{% endif %}</td>
+    <td>{% if u.is_active %}oui{% else %}<span class="pill crit">bloqué</span>{% endif %}</td>
+    <td>{{ u.last_login|default:"—" }}</td>
+    <td><form method="post" action="{% url 'accounts:user_delete' u.pk %}" class="inline" data-confirm="Supprimer le compte {{ u.username }} ?">{% csrf_token %}<button class="btn small danger" type="submit">Supprimer</button></form></td>
+  </tr>{% endfor %}</tbody>
+</table>
+</div>
+{% endblock %}

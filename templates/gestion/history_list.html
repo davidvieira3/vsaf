@@ -1,0 +1,41 @@
+{% extends "base.html" %}{% load humanize %}
+{% block title %}Historique Excel{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Historique des collectes</h1>
+    <p>Un classeur par collecte réussie et un classeur complet chaque nuit, conservés {{ retention }} jours.
+    Espace occupé : {{ used|filesizeformat }}{% if free is not None %}, libre sur le disque : {{ free|filesizeformat }}{% endif %}.</p></div>
+  {% if is_operator %}<div class="actions">
+    <form method="post" action="{% url 'gestion:history_generate' %}" class="inline">{% csrf_token %}<button class="btn primary" type="submit">Générer un classeur complet maintenant</button></form>
+  </div>{% endif %}
+</div>
+<form class="toolbar" method="get">
+  <select name="kind" aria-label="Type de fichier">
+    <option value="">Tous les fichiers</option>
+    {% for code, label in kinds %}<option value="{{ code }}" {% if kind == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <label class="hint">du <input type="date" name="from" value="{{ day_from }}"></label>
+  <label class="hint">au <input type="date" name="to" value="{{ day_to }}"></label>
+  <div class="grow"><input type="search" name="q" value="{{ q }}" placeholder="Nom de la source ou de la baie" aria-label="Rechercher"></div>
+  <button class="btn" type="submit">Filtrer</button>
+</form>
+<div class="panel table-wrap">
+<table class="plain">
+  <thead><tr><th>Date</th><th>Contenu</th><th>Type</th><th class="num">Taille</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for f in files %}<tr>
+    <td>{{ f.created_at|date:"d/m/Y H:i" }}</td>
+    <td>{{ f.label }}</td>
+    <td>{{ f.get_kind_display }}</td>
+    <td class="num">{{ f.size_bytes|filesizeformat }}</td>
+    <td class="actions">
+      <a class="btn small" href="{% url 'gestion:history_download' f.pk %}">Télécharger</a>
+      {% if f.run_id and is_operator %}<a class="btn small" href="{% url 'gestion:run_detail' f.run_id %}">Journal</a>{% endif %}
+      {% if is_admin %}<form method="post" action="{% url 'gestion:history_delete' f.pk %}" class="inline" data-confirm="Supprimer ce fichier ?">{% csrf_token %}<button class="btn small danger" type="submit">Supprimer</button></form>{% endif %}
+    </td>
+  </tr>{% empty %}<tr><td colspan="5" class="hint">Aucun fichier pour ces critères. Les fichiers apparaissent après chaque collecte réussie.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% if count > 500 %}<p class="hint">{{ count|intcomma }} fichiers correspondent ; seuls les 500 plus récents sont affichés, affinez avec les dates.</p>{% endif %}
+</div>
+{% endblock %}

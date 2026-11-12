@@ -1,0 +1,113 @@
+{% extends "base.html" %}{% load humanize %}
+{% block title %}Vue d'ensemble{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Vue d'ensemble</h1>
+    <p>Consolidation CPU et mémoire de tout le parc, et ce qui demande votre attention.</p>
+  </div>
+  {% if is_operator %}
+  <div class="actions">
+    <form method="post" action="{% url 'gestion:collect_all' %}" class="inline" data-confirm="Lancer la collecte de toutes les sources actives ?">{% csrf_token %}
+      <button class="btn primary" type="submit">Collecter toutes les sources</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="stack">
+<div class="grid-2">
+  {% for key, p in by_platform.items %}
+  <section class="panel">
+    <div class="platform-title">
+      <h2>{% if key == "vmware" %}VMware vSphere{% else %}Proxmox VE{% endif %}</h2>
+      <a href="{% url 'inventory:grid' 'sources' %}">{{ p.n }} source{{ p.n|pluralize }}</a>
+    </div>
+    <dl class="platform-sheet">
+      <div><dt>Hôtes</dt><dd>{{ p.hosts|intcomma }}</dd></div>
+      <div><dt>VM allumées / total</dt><dd>{{ p.vms_on|intcomma }} <span class="hint">/ {{ p.vms|intcomma }}</span></dd></div>
+      <div><dt>Cœurs physiques</dt><dd>{{ p.cores|intcomma }}</dd></div>
+      <div><dt>vCPU par cœur</dt><dd>{% if p.cpu_ratio is not None %}<span class="pill {% if p.cpu_ratio >= settings.cpu_ratio_crit %}crit{% elif p.cpu_ratio >= settings.cpu_ratio_warn %}warn{% else %}ok{% endif %}">{{ p.cpu_ratio|floatformat:2 }}</span>{% else %}—{% endif %}</dd></div>
+      <div><dt>vRAM / RAM</dt><dd>{% if p.mem_ratio is not None %}<span class="pill {% if p.mem_ratio >= settings.mem_ratio_crit %}crit{% elif p.mem_ratio >= settings.mem_ratio_warn %}warn{% else %}ok{% endif %}">{{ p.mem_ratio|floatformat:2 }}</span>{% else %}—{% endif %}</dd></div>
+      <div><dt>Stockage utilisé</dt><dd>{% if p.used_pct is not None %}{{ p.used_pct|floatformat:1 }} %{% else %}—{% endif %}</dd></div>
+    </dl>
+    <p class="hint">Ratios calculés sur les VM allumées, hors templates.</p>
+  </section>
+  {% endfor %}
+</div>
+
+{% if failing or stale or never or running %}
+<section class="panel">
+  <h2>État des collectes</h2>
+  <p>
+    {% if running %}<span class="pill running">{{ running }} en cours ou en file</span>{% endif %}
+    {% if stale %}<span class="pill warn">{{ stale }} source{{ stale|pluralize }} sans succès depuis plus de 24 h</span>{% endif %}
+    {% if never %}<span class="pill">{{ never }} jamais collectée{{ never|pluralize }}</span>{% endif %}
+  </p>
+  {% if failing %}
+  <div class="table-wrap"><table class="plain">
+    <thead><tr><th>Source</th><th>Dernière tentative</th><th>Erreur</th></tr></thead>
+    <tbody>{% for s in failing %}<tr>
+      <td>{% if is_operator %}<a href="{% url 'gestion:source_edit' s.pk %}">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}</td>
+      <td>{{ s.last_run_at|naturaltime }}</td><td class="mono">{{ s.last_error|truncatechars:160 }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+</section>
+{% endif %}
+
+<div class="grid-2">
+  <section class="panel">
+    <h2>Clusters les plus consolidés en CPU</h2>
+    <div class="table-wrap"><table class="plain">
+      <thead><tr><th>Cluster</th><th>Source</th><th class="num">Cœurs</th><th class="num">vCPU</th><th class="num">vCPU/cœur</th></tr></thead>
+      <tbody>{% for c in hot_clusters %}<tr>
+        <td>{{ c.name }}</td><td>{{ c.source.name }}</td><td class="num">{{ c.total_cores }}</td><td class="num">{{ c.vcpu_on }}</td>
+        <td class="num"><span class="pill {% if c.cpu_ratio_on >= settings.cpu_ratio_crit %}crit{% elif c.cpu_ratio_on >= settings.cpu_ratio_warn %}warn{% else %}ok{% endif %}">{{ c.cpu_ratio_on|floatformat:2 }}</span></td>
+      </tr>{% empty %}<tr><td colspan="5" class="hint">Aucun cluster collecté pour l'instant.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  <section class="panel">
+    <h2>Clusters les plus consolidés en mémoire</h2>
+    <div class="table-wrap"><table class="plain">
+      <thead><tr><th>Cluster</th><th>Source</th><th class="num">vRAM / RAM</th></tr></thead>
+      <tbody>{% for c in hot_mem %}<tr>
+        <td>{{ c.name }}</td><td>{{ c.source.name }}</td>
+        <td class="num"><span class="pill {% if c.mem_ratio_on >= settings.mem_ratio_crit %}crit{% elif c.mem_ratio_on >= settings.mem_ratio_warn %}warn{% else %}ok{% endif %}">{{ c.mem_ratio_on|floatformat:2 }}</span></td>
+      </tr>{% empty %}<tr><td colspan="3" class="hint">Aucun cluster collecté pour l'instant.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  <section class="panel">
+    <h2>Datastores au-delà de {{ settings.ds_used_warn|floatformat:0 }} %</h2>
+    <div class="table-wrap"><table class="plain">
+      <thead><tr><th>Datastore</th><th>Source</th><th>Type</th><th class="num">Utilisé</th></tr></thead>
+      <tbody>{% for d in full_ds %}<tr>
+        <td>{{ d.name }}</td><td>{{ d.source.name }}</td><td>{{ d.ds_type }}</td>
+        <td class="num"><span class="pill {% if d.used_pct >= settings.ds_used_crit %}crit{% else %}warn{% endif %}">{{ d.used_pct|floatformat:1 }} %</span></td>
+      </tr>{% empty %}<tr><td colspan="4" class="hint">Aucun datastore au-dessus du seuil.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  <section class="panel">
+    <h2>Baies au-delà de {{ settings.ds_used_warn|floatformat:0 }} %</h2>
+    <div class="table-wrap"><table class="plain">
+      <thead><tr><th>Baie</th><th>Modèle</th><th class="num">Capacité</th><th class="num">Utilisé</th></tr></thead>
+      <tbody>{% for a in full_arrays %}<tr>
+        <td>{{ a.name }}</td><td>{{ a.model }}</td><td class="num">{{ a.capacity_bytes|filesizeformat }}</td>
+        <td class="num"><span class="pill {% if a.used_pct >= settings.ds_used_crit %}crit{% else %}warn{% endif %}">{{ a.used_pct|floatformat:1 }} %</span></td>
+      </tr>{% empty %}<tr><td colspan="4" class="hint">Aucune baie au-dessus du seuil.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <p class="hint">{{ cmdb_missing|intcomma }} VM sans CI ServiceNow rapproché — voir <a href="{% url 'gestion:cmdb' %}">ServiceNow</a>.</p>
+  </section>
+  <section class="panel">
+    <h2>Hôtes déconnectés ou hors ligne</h2>
+    <div class="table-wrap"><table class="plain">
+      <thead><tr><th>Hôte</th><th>Cluster</th><th>Source</th><th>État</th></tr></thead>
+      <tbody>{% for h in hosts_down %}<tr>
+        <td>{{ h.name }}</td><td>{{ h.cluster_name }}</td><td>{{ h.source.name }}</td><td><span class="pill crit">{{ h.connection_state }}</span></td>
+      </tr>{% empty %}<tr><td colspan="4" class="hint">Tous les hôtes répondent.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <p class="hint">{{ no_bmc|intcomma }} hôte{{ no_bmc|pluralize }} sans adresse de BMC rapprochée — voir <a href="{% url 'gestion:connectors' %}">Matériel</a>.</p>
+  </section>
+</div>
+</div>
+{% endblock %}

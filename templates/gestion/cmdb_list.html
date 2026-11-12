@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% load humanize %}
+{% block title %}ServiceNow{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>ServiceNow CMDB</h1>
+    <p>Lecture seule de la CMDB pour afficher propriétaire, groupe de support, environnement… dans la vue des VM.
+    {{ matched|intcomma }} VM sur {{ vms|intcomma }} rapprochées d'un CI ({{ records|intcomma }} CI lus).</p></div>
+  <div class="actions">
+    {% if is_admin %}<a class="btn primary" href="{% url 'gestion:cmdb_create' %}">Ajouter un connecteur</a>{% endif %}
+    <a class="btn" href="{% url 'inventory:grid' 'vms' %}?q=">Voir les VM</a>
+  </div>
+</div>
+<div class="panel table-wrap">
+<table class="plain">
+  <thead><tr><th>Nom</th><th>Instance</th><th>Table</th><th class="num">CI lus</th><th>Dernière synchro</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for c in connectors %}<tr>
+    <td>{% if is_admin %}<a href="{% url 'gestion:cmdb_edit' c.pk %}">{{ c.name }}</a>{% else %}{{ c.name }}{% endif %}{% if not c.enabled %} <span class="pill">désactivé</span>{% endif %}</td>
+    <td class="mono">{{ c.instance_url }}</td><td class="mono">{{ c.table }}</td><td class="num">{{ c.records.count|intcomma }}</td>
+    <td>{% if c.last_status %}<span class="pill {{ c.last_status }}" title="{{ c.last_error }}">{{ c.last_status }}</span>{% endif %} <span class="hint">{{ c.last_run_at|naturaltime|default:"jamais" }}</span></td>
+    <td class="actions">
+      <a class="btn small" href="{% url 'gestion:cmdb_test' c.pk %}">Tester</a>
+      <form method="post" action="{% url 'gestion:cmdb_sync' c.pk %}" class="inline">{% csrf_token %}<button class="btn small" type="submit">Synchroniser</button></form>
+      {% if is_admin %}<form method="post" action="{% url 'gestion:cmdb_delete' c.pk %}" class="inline" data-confirm="Supprimer ce connecteur ? Les colonnes CMDB des VM seront vidées.">{% csrf_token %}<button class="btn small danger" type="submit">Supprimer</button></form>{% endif %}
+    </td>
+  </tr>{% empty %}<tr><td colspan="6" class="hint">Aucun connecteur ServiceNow.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="hint">Le test lit 5 CI et signale les champs que la table ne connaît pas (champs personnalisés u_… mal orthographiés, par exemple).</p>
+{% endblock %}

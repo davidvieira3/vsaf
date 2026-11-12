@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Tester {{ realm.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Tester {{ realm.name }}</h1><p>Vérifie la connexion LDAPS, le compte de service, puis la recherche d'un utilisateur et le rôle qui lui serait attribué. Aucun mot de passe utilisateur n'est demandé.</p></div>
+  <div class="actions"><a class="btn" href="{% url 'accounts:realms' %}">Retour</a></div></div>
+<form method="post" class="form panel">{% csrf_token %}
+  <div class="field"><label for="id_login">{{ form.login.label }}</label>{{ form.login }}</div>
+  <button class="btn primary" type="submit">Lancer le test</button>
+</form>
+{% if steps %}
+<section class="panel" style="margin-top:16px"><h2>Résultat</h2>
+  <ul class="steps">{% for level, msg in steps %}<li><span class="pill {% if level == 'ok' %}ok{% elif level == 'warn' %}warn{% else %}crit{% endif %}">{{ level }}</span> {{ msg }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% load humanize %}
+{% block title %}Baies de stockage{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Baies de stockage</h1>
+    <p>Connexions en lecture seule aux baies HPE (3PAR, Primera, Alletra, Nimble), NetApp ONTAP et Pure FlashArray. Les LUN et volumes NFS sont rattachés automatiquement aux datastores.</p></div>
+  <div class="actions">
+    {% if is_admin %}<a class="btn primary" href="{% url 'gestion:storage_create' %}">Ajouter une baie</a>{% endif %}
+    <a class="btn" href="{% url 'inventory:grid' 'arrays' %}">Voir l'inventaire</a>
+  </div>
+</div>
+<div class="panel table-wrap">
+<table class="plain">
+  <thead><tr><th>Nom</th><th>Type</th><th>Adresse</th><th>Modèle</th><th>Version</th><th class="num">Volumes</th><th>Dernière collecte</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for s in systems %}<tr>
+    <td>{% if is_admin %}<a href="{% url 'gestion:storage_edit' s.pk %}">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}{% if not s.enabled %} <span class="pill">désactivée</span>{% endif %}</td>
+    <td>{{ s.get_kind_display }}</td>
+    <td class="mono">{{ s.host }}{% if s.port %}:{{ s.port }}{% endif %}</td>
+    <td>{{ s.model }}</td><td>{{ s.version }}</td><td class="num">{{ s.num_volumes|intcomma }}</td>
+    <td>{% if s.last_status %}<span class="pill {{ s.last_status }}" title="{{ s.last_error }}">{{ s.last_status }}</span>{% endif %} <span class="hint">{{ s.last_run_at|naturaltime|default:"jamais" }}</span></td>
+    <td class="actions">
+      <a class="btn small" href="{% url 'gestion:storage_test' s.pk %}">Tester</a>
+      <form method="post" action="{% url 'gestion:storage_collect' s.pk %}" class="inline">{% csrf_token %}<button class="btn small" type="submit">Collecter</button></form>
+      {% if is_admin %}<form method="post" action="{% url 'gestion:storage_delete' s.pk %}" class="inline" data-confirm="Supprimer la baie {{ s.name }} et son inventaire ?">{% csrf_token %}<button class="btn small danger" type="submit">Supprimer</button></form>{% endif %}
+    </td>
+  </tr>{% empty %}<tr><td colspan="8" class="hint">Aucune baie. {% if is_admin %}<a href="{% url 'gestion:storage_create' %}">Ajoutez-en une</a> avec un compte en lecture seule.{% endif %}</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

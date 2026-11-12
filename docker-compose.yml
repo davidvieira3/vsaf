@@ -1,0 +1,74 @@
+name: infra-inventory
+
+# Données persistantes sur le disque dédié de la VM (DATA_DIR, /srv/inventaire par défaut).
+# Suffixe :Z / :z = étiquetage SELinux (RHEL en mode enforcing).
+
+x-app: &app
+  build:
+    context: .
+    args:
+      PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+      VENDOR_BASE: ${VENDOR_BASE:-https://cdn.jsdelivr.net/npm}
+  image: infra-inventory:latest
+  env_file: .env
+  restart: unless-stopped
+  volumes:
+    - ${DATA_DIR:-/srv/inventaire}/history:/data/history:z
+  depends_on:
+    db: { condition: service_healthy }
+    redis: { condition: service_started }
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-inventory}
+      POSTGRES_USER: ${POSTGRES_USER:-inventory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: >
+      postgres -c shared_buffers=${PG_SHARED_BUFFERS:-4GB} -c effective_cache_size=${PG_EFFECTIVE_CACHE:-12GB}
+      -c work_mem=32MB -c maintenance_work_mem=512MB -c max_connections=200
+      -c checkpoint_completion_target=0.9 -c wal_buffers=16MB -c random_page_cost=1.1
+    shm_size: 1g
+    volumes:
+      - ${DATA_DIR:-/srv/inventaire}/pgdata:/var/lib/postgresql/data:Z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "512mb"]
+
+  web:
+    <<: *app
+    command: ["web"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:8000/comptes/connexion/ || exit 1"]
+      interval: 10s
+      retries: 30
+      start_period: 20s
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    depends_on:
+      web: { condition: service_healthy }
+
+  beat:
+    <<: *app
+    command: ["beat"]
+    depends_on:
+      web: { condition: service_healthy }
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro,z
+      - ./nginx/certs:/etc/nginx/certs:ro,z
+    depends_on: [web]

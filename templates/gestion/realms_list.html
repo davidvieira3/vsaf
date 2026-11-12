@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Active Directory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Domaines Active Directory</h1>
+  <p>Un domaine par ligne (euro, gaia, xmp…). Les rôles sont attribués d'après les groupes AD à chaque connexion. Pour des groupes situés dans un autre domaine de la forêt, pointez vers le catalogue global (port 3269).</p></div>
+  <div class="actions"><a class="btn primary" href="{% url 'accounts:realm_create' %}">Ajouter un domaine</a></div>
+</div>
+<div class="panel table-wrap">
+<table class="plain">
+  <thead><tr><th>Nom</th><th>Domaine</th><th>NetBIOS</th><th>Contrôleurs</th><th>Port</th><th>État</th><th>Actions</th></tr></thead>
+  <tbody>{% for r in realms %}<tr>
+    <td><a href="{% url 'accounts:realm_edit' r.pk %}">{{ r.name }}</a></td><td>{{ r.domain }}</td><td>{{ r.netbios }}</td>
+    <td class="mono">{{ r.servers }}</td><td>{{ r.port }}{% if r.use_ssl %} (TLS){% endif %}</td>
+    <td>{% if r.enabled %}<span class="pill ok">actif</span>{% else %}<span class="pill">désactivé</span>{% endif %}</td>
+    <td class="actions"><a class="btn small" href="{% url 'accounts:realm_test' r.pk %}">Tester</a>
+      <form method="post" action="{% url 'accounts:realm_delete' r.pk %}" class="inline" data-confirm="Supprimer ce domaine ? Ses utilisateurs ne pourront plus se connecter.">{% csrf_token %}<button class="btn small danger" type="submit">Supprimer</button></form></td>
+  </tr>{% empty %}<tr><td colspan="7" class="hint">Aucun domaine : seuls les comptes locaux peuvent se connecter.</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% load humanize %}
+{% block title %}Matériel{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Matériel : iDRAC, iLO et autres BMC</h1>
+    <p>vSphere fournit le constructeur, le modèle et le numéro de série, mais pas l'adresse du contrôleur de gestion. Ces connecteurs la récupèrent et la rapprochent des hôtes par numéro de série. {{ records|intcomma }} fiche{{ records|pluralize }} matérielle{{ records|pluralize }} connue{{ records|pluralize }}.</p></div>
+  {% if is_admin %}<div class="actions"><a class="btn primary" href="{% url 'gestion:connector_create' %}">Ajouter un connecteur</a></div>{% endif %}
+</div>
+<div class="panel table-wrap">
+<table class="plain">
+  <thead><tr><th>Nom</th><th>Type</th><th>Cible</th><th>Dernière synchro</th><th class="num">Fiches</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for c in connectors %}
+    <tr>
+      <td>{% if is_admin %}<a href="{% url 'gestion:connector_edit' c.pk %}">{{ c.name }}</a>{% else %}{{ c.name }}{% endif %}{% if not c.enabled %} <span class="pill">désactivé</span>{% endif %}</td>
+      <td>{{ c.get_kind_display }}</td>
+      <td class="mono">{{ c.url|default:"liste de BMC" }}</td>
+      <td>{% if c.last_status %}<span class="pill {{ c.last_status }}" title="{{ c.last_error }}">{{ c.last_status }}</span>{% endif %} <span class="hint">{{ c.last_run_at|naturaltime|default:"jamais" }}</span></td>
+      <td class="num">{{ c.records.count }}</td>
+      <td class="actions">
+        <a class="btn small" href="{% url 'gestion:connector_test' c.pk %}">Tester</a>
+        <form method="post" action="{% url 'gestion:connector_sync' c.pk %}" class="inline">{% csrf_token %}<button class="btn small" type="submit">Synchroniser</button></form>
+        {% if is_admin %}<form method="post" action="{% url 'gestion:connector_delete' c.pk %}" class="inline" data-confirm="Supprimer ce connecteur et ses fiches ?">{% csrf_token %}<button class="btn small danger" type="submit">Supprimer</button></form>{% endif %}
+      </td>
+    </tr>
+  {% empty %}<tr><td colspan="6" class="hint">Aucun connecteur. Ajoutez Dell OpenManage Enterprise, HPE OneView, ou une liste de BMC interrogés en Redfish.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

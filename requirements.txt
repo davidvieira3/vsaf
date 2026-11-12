@@ -1,0 +1,13 @@
+Django>=5.1,<5.2
+psycopg[binary]>=3.2,<3.3
+celery[redis]>=5.4,<5.5
+redis>=5.0,<6
+gunicorn>=23,<24
+whitenoise>=6.7,<7
+cryptography>=43
+ldap3==2.9.1
+pyvmomi>=8.0.3.0.1,<9
+proxmoxer>=2.2,<3
+requests>=2.32,<3
+paramiko>=3.5,<4
+openpyxl>=3.1,<4

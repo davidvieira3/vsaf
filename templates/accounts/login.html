@@ -1,0 +1,24 @@
+{% load static %}<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connexion · Inventaire infra</title>
+<link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+<div class="login">
+  <form class="card form" method="post" novalidate>
+    {% csrf_token %}
+    <svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#0b7a75"/><g fill="#fff"><rect x="7" y="7" width="18" height="4" rx="1"/><rect x="7" y="14" width="18" height="4" rx="1"/><rect x="7" y="21" width="18" height="4" rx="1"/></g></svg>
+    <h1>Inventaire infra</h1>
+    <p>Compte local ou compte Active Directory (EURO\identifiant ou identifiant@domaine).</p>
+    {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+    <div class="field"><label for="id_username">Identifiant</label>{{ form.username }}</div>
+    <div class="field"><label for="id_password">Mot de passe</label>{{ form.password }}</div>
+    <div class="field"><label for="id_realm">Annuaire</label>{{ form.realm }}</div>
+    <button class="btn primary" type="submit">Se connecter</button>
+  </form>
+</div>
+</body>
+</html>

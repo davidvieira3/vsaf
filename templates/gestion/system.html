@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Système{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Système</h1><p>État des workers de collecte, sans passer par un shell.</p></div>
+  <div class="actions">{% if queued %}<form method="post" action="{% url 'gestion:cancel_queued' %}" class="inline" data-confirm="Annuler les {{ queued }} collecte(s) en file ?">{% csrf_token %}<button class="btn" type="submit">Annuler la file ({{ queued }})</button></form>{% endif %}</div>
+</div>
+<div class="grid-2">
+<section class="panel"><h2>Workers</h2>
+  {% if error %}<p class="pill crit">{{ error }}</p>{% endif %}
+  <table class="plain"><thead><tr><th>Worker</th><th class="num">Tâches actives</th><th class="num">Parallélisme</th></tr></thead>
+  <tbody>{% for name, w in workers.items %}<tr><td class="mono">{{ name }}</td><td class="num">{{ w.active }}</td><td class="num">{{ w.concurrency|default:"?" }}</td></tr>
+  {% empty %}<tr><td colspan="3"><span class="pill crit">Aucun worker ne répond</span> — les collectes restent en file. Vérifiez le conteneur « worker ».</td></tr>{% endfor %}</tbody></table>
+</section>
+<section class="panel"><h2>En cours</h2>
+  <table class="plain"><thead><tr><th>Cible</th><th>Depuis</th></tr></thead>
+  <tbody>{% for r in running %}<tr><td><a href="{% url 'gestion:run_detail' r.pk %}">{{ r.target }}</a></td><td>{{ r.started_at|timesince }}</td></tr>
+  {% empty %}<tr><td colspan="2" class="hint">Aucune collecte en cours. {{ queued }} en file.</td></tr>{% endfor %}</tbody></table>
+</section>
+</div>
+{% endblock %}

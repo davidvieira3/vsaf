@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Collecte {{ run.target }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Collecte : {{ run.target }}</h1>
+    <p><span id="run-status" class="pill {{ run.status }}">{{ run.get_status_display }}</span>
+      demandée par {{ run.triggered_by|default:"—" }} le {{ run.queued_at }}{% if run.duration %}, durée {{ run.duration|floatformat:0 }} s{% endif %}.</p></div>
+  <div class="actions">
+    {% if run.source %}<form method="post" action="{% url 'gestion:source_collect' run.source.pk %}" class="inline">{% csrf_token %}<button class="btn" type="submit">Relancer</button></form>{% endif %}
+    {% if run.storage_system %}<form method="post" action="{% url 'gestion:storage_collect' run.storage_system.pk %}" class="inline">{% csrf_token %}<button class="btn" type="submit">Relancer</button></form>{% endif %}
+    {% if run.cmdb %}<form method="post" action="{% url 'gestion:cmdb_sync' run.cmdb.pk %}" class="inline">{% csrf_token %}<button class="btn" type="submit">Relancer</button></form>{% endif %}
+    <a class="btn" href="{% url 'gestion:runs' %}">Toutes les collectes</a>
+  </div>
+</div>
+{% if run.counts %}<p>{% for k, v in run.counts.items %}<span class="pill">{{ k }} : {{ v }}</span> {% endfor %}</p>{% endif %}
+<pre class="log" id="run-log">{{ run.log|default:"En attente d'un worker…" }}</pre>
+{% if run.status == "queued" or run.status == "running" %}<span id="run-live" data-url="{% url 'gestion:run_detail' run.pk %}" hidden></span>{% endif %}
+{% endblock %}

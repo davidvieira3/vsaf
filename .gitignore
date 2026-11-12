@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+staticfiles/
+nginx/certs/*.key
+nginx/certs/*.crt
+static/vendor/tabulator.*

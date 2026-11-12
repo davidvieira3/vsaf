@@ -1,0 +1,45 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}{{ grid.title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ grid.title }}</h1>
+    {% if grid.intro %}<p>{{ grid.intro }}</p>{% endif %}
+  </div>
+  <div class="actions">
+    <a class="btn" href="#" data-export="{% url 'inventory:grid_export' grid.key 'csv' %}">Exporter en CSV</a>
+    <a class="btn" href="#" data-export="{% url 'inventory:grid_export' grid.key 'xlsx' %}">Exporter en Excel</a>
+  </div>
+</div>
+<div class="toolbar">
+  {% if grid.platform_field %}
+  <div class="segmented" role="group" aria-label="Plateforme">
+    <button type="button" data-platform="" aria-pressed="true">Tout</button>
+    <button type="button" data-platform="vmware" aria-pressed="false">VMware</button>
+    <button type="button" data-platform="proxmox" aria-pressed="false">Proxmox</button>
+  </div>
+  {% endif %}
+  <select id="grid-source" aria-label="Limiter à une source">
+    <option value="">{% if grid.scope == "storage" %}Toutes les baies{% else %}Toutes les sources{% endif %}</option>
+    {% for s in sources %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}
+  </select>
+  <div class="grow"><input id="grid-search" type="search" placeholder="Rechercher dans toutes les colonnes texte" aria-label="Rechercher"></div>
+  <div class="popover">
+    <button class="btn" id="columns-btn" type="button" aria-expanded="false" aria-controls="columns-panel">Colonnes</button>
+    <div class="popover-body" id="columns-panel" hidden></div>
+  </div>
+  <button class="btn" id="grid-reset" type="button">Effacer les filtres</button>
+</div>
+<p class="hint">Filtres de colonne : texte libre, <code>=valeur</code> pour l'égalité exacte, <code>!valeur</code> pour exclure ; sur les nombres <code>&gt;4</code>, <code>&lt;=1,2</code>, <code>&gt;500G</code>. Cliquez sur une ligne pour voir toutes ses propriétés.</p>
+<div id="grid"></div>
+
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="drawer-title">
+  <header><h2 id="drawer-title"></h2><button class="btn small" id="drawer-close" type="button">Fermer</button></header>
+  <div class="body" id="drawer-body"></div>
+</aside>
+{{ config|json_script:"grid-config" }}
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'vendor/tabulator.min.js' %}"></script>
+<script src="{% static 'js/grid.js' %}"></script>
+{% endblock %}
