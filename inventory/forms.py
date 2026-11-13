@@ -5,7 +5,7 @@ from django import forms
 
 from core.models import AppSettings
 
-from .models import PLATFORMS, CmdbConnector, HardwareConnector, Source, StorageSystem
+from .models import PLATFORMS, CmdbConnector, CustomField, HardwareConnector, Source, StorageSystem
 
 SECRET_HELP = "Laisser vide pour conserver la valeur enregistrée"
 
@@ -19,8 +19,9 @@ class SourceForm(forms.ModelForm):
 
     class Meta:
         model = Source
+        widgets = {"comment": forms.Textarea(attrs={"rows": 2})}
         fields = [
-            "name", "platform", "host", "port", "username", "token_id", "verify_ssl", "site", "description",
+            "name", "platform", "host", "port", "username", "token_id", "verify_ssl", "site", "description", "comment",
             "enabled", "collect_interval_min", "collect_network_hints", "collect_vm_devices",
             "ssh_enabled", "ssh_username", "ssh_port",
         ]
@@ -190,3 +191,28 @@ class CmdbConnectorForm(forms.ModelForm):
         if commit:
             obj.save()
         return obj
+
+
+class CustomFieldForm(forms.ModelForm):
+    class Meta:
+        model = CustomField
+        fields = ["key", "label", "kind", "choices", "visible", "order"]
+        widgets = {"choices": forms.Textarea(attrs={"rows": 6})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["key"].disabled = True  # les valeurs déjà saisies sont rangées sous cette clé
+
+    def clean_key(self):
+        import re
+        key = self.cleaned_data["key"].lower().replace("-", "_")
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", key):
+            raise forms.ValidationError("Commencez par une lettre ; minuscules, chiffres et _ uniquement.")
+        return key
+
+    def clean(self):
+        data = super().clean()
+        if data.get("kind") == "choice" and not (data.get("choices") or "").strip():
+            self.add_error("choices", "Indiquez au moins une valeur.")
+        return data

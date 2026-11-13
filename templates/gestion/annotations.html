@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Commentaires et catégories{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Commentaires et catégories</h1>
+    <p>Commentez et catégorisez vos vCenter et clusters Proxmox dans un seul tableau. Ces valeurs deviennent des colonnes et des filtres dans toutes les vues, jusqu'aux VM.</p></div>
+  <div class="actions">
+    {% if is_admin %}<a class="btn" href="{% url 'gestion:fields' %}">Gérer les champs personnalisés</a>{% endif %}
+  </div>
+</div>
+<form class="toolbar" method="get">
+  <div class="segmented" role="group" aria-label="Plateforme">
+    <button name="platform" value="" aria-pressed="{% if not platform %}true{% else %}false{% endif %}">Tout</button>
+    <button name="platform" value="vmware" aria-pressed="{% if platform == 'vmware' %}true{% else %}false{% endif %}">VMware</button>
+    <button name="platform" value="proxmox" aria-pressed="{% if platform == 'proxmox' %}true{% else %}false{% endif %}">Proxmox</button>
+  </div>
+  <div class="grow"><input type="search" name="q" value="{{ q }}" placeholder="Nom, site ou commentaire" aria-label="Rechercher"></div>
+</form>
+<form method="post">{% csrf_token %}
+<div class="panel table-wrap">
+<table class="plain annot">
+  <thead><tr><th>Source</th><th>Plateforme</th><th>Commentaire</th>{% for cf in fields %}<th>{{ cf.label }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for row in rows %}<tr>
+    <td><strong>{{ row.source.name }}</strong><br><span class="hint">{{ row.source.host }}{% if row.source.site %} · {{ row.source.site }}{% endif %}</span></td>
+    <td><span class="tag {{ row.source.platform }}">{{ row.source.get_platform_display }}</span></td>
+    <td class="comment"><input type="text" name="c_{{ row.source.pk }}" value="{{ row.source.comment }}" maxlength="2000" aria-label="Commentaire de {{ row.source.name }}"></td>
+    {% for cell in row.cells %}<td>
+      {% if cell.field.kind == "choice" %}
+      <select name="{{ cell.name }}" aria-label="{{ cell.field.label }} de {{ row.source.name }}">
+        <option value="">—</option>
+        {% for c in cell.field.choice_list %}<option value="{{ c }}" {% if c == cell.value %}selected{% endif %}>{{ c }}</option>{% endfor %}
+        {% if cell.value and cell.value not in cell.field.choice_list %}<option value="{{ cell.value }}" selected>{{ cell.value }} (hors liste)</option>{% endif %}
+      </select>
+      {% else %}
+      <input type="text" name="{{ cell.name }}" value="{{ cell.value }}" maxlength="255" aria-label="{{ cell.field.label }} de {{ row.source.name }}">
+      {% endif %}
+    </td>{% endfor %}
+  </tr>{% empty %}<tr><td colspan="{{ fields|length|add:3 }}" class="hint">Aucune source ne correspond.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{% if rows %}<p style="margin-top:12px"><button class="btn primary" type="submit">Enregistrer les modifications</button></p>{% endif %}
+</form>
+{% if not fields %}<p class="hint">Aucun champ personnalisé pour l'instant{% if is_admin %} : <a href="{% url 'gestion:field_create' %}">créez-en un</a> (environnement, client, criticité…){% endif %}.</p>{% endif %}
+{% endblock %}

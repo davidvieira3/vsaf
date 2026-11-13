@@ -37,6 +37,7 @@
     {% if is_operator %}
     <h2>Gestion</h2>
     <a href="{% url 'gestion:sources' %}" {% if '/gestion/sources' in path %}aria-current="page"{% endif %}>Sources</a>
+    <a href="{% url 'gestion:annotations' %}" {% if '/gestion/annotations' in path %}aria-current="page"{% endif %}>Commentaires &amp; catégories</a>
     <a href="{% url 'gestion:runs' %}" {% if '/gestion/collectes' in path %}aria-current="page"{% endif %}>Collectes</a>
     <a href="{% url 'gestion:storage' %}" {% if '/gestion/baies' in path %}aria-current="page"{% endif %}>Baies de stockage</a>
     <a href="{% url 'gestion:connectors' %}" {% if '/gestion/materiel' in path %}aria-current="page"{% endif %}>Matériel (iDRAC, iLO…)</a>
@@ -45,6 +46,7 @@
     {% if is_admin %}
     <a href="{% url 'accounts:users' %}" {% if '/comptes/utilisateurs' in path %}aria-current="page"{% endif %}>Utilisateurs</a>
     <a href="{% url 'accounts:realms' %}" {% if '/comptes/domaines' in path %}aria-current="page"{% endif %}>Active Directory</a>
+    <a href="{% url 'gestion:fields' %}" {% if '/gestion/champs' in path %}aria-current="page"{% endif %}>Champs personnalisés</a>
     <a href="{% url 'gestion:settings' %}" {% if '/gestion/parametres' in path %}aria-current="page"{% endif %}>Paramètres</a>
     <a href="{% url 'gestion:audit' %}" {% if '/gestion/journal' in path %}aria-current="page"{% endif %}>Journal d'audit</a>
     <a href="{% url 'gestion:system' %}" {% if '/gestion/systeme' in path %}aria-current="page"{% endif %}>Système</a>

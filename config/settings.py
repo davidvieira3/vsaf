@@ -94,6 +94,7 @@ CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 X_FRAME_OPTIONS = "DENY"
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 20000  # tableau d'annotation : sources × champs personnalisés
 
 LANGUAGE_CODE = "fr-fr"
 TIME_ZONE = env("TZ", "Europe/Paris")

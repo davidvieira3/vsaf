@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Champs personnalisés{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Champs personnalisés</h1>
+    <p>Définissez ici vos propres catégories pour les vCenter et clusters Proxmox. Chaque champ devient une colonne et un filtre dans toutes les vues et dans les exports Excel.</p></div>
+  <div class="actions">
+    <a class="btn primary" href="{% url 'gestion:field_create' %}">Ajouter un champ</a>
+    <a class="btn" href="{% url 'gestion:annotations' %}">Renseigner les valeurs</a>
+  </div>
+</div>
+<div class="panel table-wrap">
+<table class="plain">
+  <thead><tr><th>Libellé</th><th>Identifiant</th><th>Type</th><th>Valeurs</th><th>Colonne par défaut</th><th class="num">Ordre</th><th>Actions</th></tr></thead>
+  <tbody>{% for f in fields %}<tr>
+    <td><a href="{% url 'gestion:field_edit' f.pk %}">{{ f.label }}</a></td><td class="mono">{{ f.key }}</td><td>{{ f.get_kind_display }}</td>
+    <td>{{ f.choice_list|join:", "|truncatechars:90 }}</td><td>{% if f.visible %}oui{% else %}non{% endif %}</td><td class="num">{{ f.order }}</td>
+    <td><form method="post" action="{% url 'gestion:field_delete' f.pk %}" class="inline" data-confirm="Supprimer le champ {{ f.label }} et toutes ses valeurs ?">{% csrf_token %}<button class="btn small danger" type="submit">Supprimer</button></form></td>
+  </tr>{% empty %}<tr><td colspan="7" class="hint">Aucun champ. Exemples utiles : Environnement (Production, Recette, Lab), Client, Criticité, Équipe responsable.</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% endblock %}

@@ -175,6 +175,7 @@ class VSphereCollector:
         vms_raw = retrieve(content, vim.VirtualMachine, vm_props)
         log.info(f"{len(vms_raw)} VM / template(s)")
 
+        links = []  # relations VM ↔ datastore et hôte ↔ datastore pour les filtres croisés
         host_agg, cluster_agg = VmAggregate(), VmAggregate()
         vms = []
         pg_vm_count = defaultdict(int)
@@ -215,6 +216,9 @@ class VSphereCollector:
                         })
                 disks, nics = len(disk_list), len(nic_list)
                 props = {"disks": disk_list, "nics": nic_list}
+            for d in v.get("datastore") or []:
+                if ds_name.get(moid(d)):
+                    links.append({"kind": "vm_ds", "left_moid": v["_moid"], "left_name": s(v.get("name")), "right_name": ds_name[moid(d)]})
             committed = v.get("summary.storage.committed") or 0
             vms.append({
                 "moid": v["_moid"],
@@ -437,6 +441,8 @@ class VSphereCollector:
             dtype = s(g(summ, "type"), 32)
             mounts = d.get("host") or []
             mount_hosts = [host_name.get(moid(m.key), "") for m in mounts]
+            for hn in filter(None, mount_hosts):
+                links.append({"kind": "host_ds", "left_name": hn, "right_name": s(d.get("name"))})
             remote, fs_version, extents = "", "", ""
             vmfs = g(info, "vmfs")
             nas = g(info, "nas")
@@ -576,6 +582,7 @@ class VSphereCollector:
             "portgroups": portgroups,
             "neighbors": neighbors,
             "vms": vms,
+            "links": links,
         }
         return result, about_fields
 

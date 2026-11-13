@@ -36,6 +36,26 @@ Toutes les vues ont : pagination et filtres côté serveur (supportent des dizai
 
 Les ratios sont calculés sur les **cœurs physiques** (pas les threads) et hors templates. Les seuils d'alerte et critiques se règlent dans Paramètres.
 
+## Commentaires, champs personnalisés et vues liées
+
+**Commentaires et catégories.** Gestion → Commentaires & catégories affiche toutes les sources dans un tableau : un commentaire libre et une cellule par champ personnalisé, enregistrés en une fois (rôle Opérateur). Les champs se définissent dans Gestion → Champs personnalisés (rôle Administrateur) : texte libre ou liste de valeurs, par exemple Environnement, Client, Criticité. Ils s'appliquent indifféremment aux vCenter et aux clusters Proxmox.
+
+**Héritage.** Le commentaire et les champs d'une source sont repris comme colonnes dans toutes les vues (clusters, hôtes, datastores, réseau, CDP/LLDP, VM) et dans les exports et l'historique Excel. Catégoriser 100 vCenter suffit donc à catégoriser 50 000 VM.
+
+**Filtres croisés.** Chaque vue propose une barre « Filtrer par » :
+
+| Vue | Filtres disponibles |
+|---|---|
+| vCenter & Proxmox | sources, champs personnalisés |
+| Clusters | sources, clusters, hôtes, VM, champs personnalisés |
+| Hôtes, Datastores, VM | sources, clusters, hôtes, datastores, VM, champs personnalisés |
+| Commutateurs, Portgroups | sources, hôtes, champs personnalisés |
+| CDP / LLDP | sources, clusters, hôtes, champs personnalisés |
+
+Les sélecteurs sont multiples, avec recherche, et en cascade : choisir des sources restreint la liste des clusters, choisir des clusters restreint celle des hôtes. Les relations VM ↔ datastore et hôte ↔ datastore sont collectées, ce qui permet par exemple « les datastores utilisés par les VM dont le nom contient sql » ou « les hôtes qui montent tel datastore ». Les filtres actifs s'affichent en pastilles retirables et sont inscrits dans l'adresse de la page, qui peut être partagée ou mise en favori.
+
+**Navigation entre vues.** Le panneau de détail d'une ligne propose des liens « voir aussi » : d'un cluster vers ses hôtes, ses VM et ses datastores ; d'un hôte vers ses VM, ses datastores, ses liens CDP/LLDP ; d'un datastore vers ses VM, ses hôtes et son volume sur la baie ; d'une VM vers son hôte, son cluster et ses datastores.
+
 ## Baies de stockage
 
 | Famille | API | Port par défaut | Compte lecture seule |

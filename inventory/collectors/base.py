@@ -7,7 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from inventory.models import (
-    Cluster, Datacenter, Datastore, Host, NetworkNeighbor, PortGroup, Source, VirtualMachine, VSwitch,
+    Cluster, Datacenter, Datastore, Host, InventoryLink, NetworkNeighbor, PortGroup, Source, VirtualMachine, VSwitch,
 )
 
 RESULT_MODELS = [
@@ -162,6 +162,10 @@ def persist(source: Source, result: dict, about: dict):
             [model(source=source, collected_at=now, **_clean(model, row)) for row in rows], batch_size=1000
         )
         counts[key] = len(rows)
+    InventoryLink.objects.filter(source=source).delete()
+    InventoryLink.objects.bulk_create(
+        [InventoryLink(source=source, **_clean(InventoryLink, link)) for link in result.get("links", [])], batch_size=2000
+    )
     for field, value in summarize(source, result, about).items():
         setattr(source, field, value)
     source.save()

@@ -1,11 +1,13 @@
 """Vues tabulaires : une définition par vue, un seul moteur générique (pagination, tri, filtres, export)."""
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
+from django.db.models.fields.json import KeyTextTransform
 
 from .models import (
-    Cluster, Datastore, Host, NetworkNeighbor, PortGroup, Source, StoragePool, StorageSystem, StorageVolume, VirtualMachine, VSwitch,
+    Cluster, CustomField, Datastore, Host, InventoryLink, NetworkNeighbor, PortGroup, Source, StoragePool, StorageSystem,
+    StorageVolume, VirtualMachine, VSwitch,
 )
 
 
@@ -30,6 +32,7 @@ class Grid:
     platform_field: str | None = "source__platform"
     scope: str = "inventory"  # "inventory" (vCenter/Proxmox) ou "storage" (baies)
     extra_filters: dict = field(default_factory=dict)
+    annotations: dict = field(default_factory=dict)  # colonnes calculées (champs personnalisés)
 
     @property
     def fields(self):
@@ -383,28 +386,154 @@ def _parse_indexed(params, prefix):
     return [items[i] for i in sorted(items)]
 
 
+# --- Champs personnalisés : colonnes dynamiques -------------------------------
+def resolve_grid(key):
+    """Définition de la vue + commentaire et champs personnalisés de la source (colonnes cf_<clé>)."""
+    base = GRIDS.get(key)
+    if base is None or base.scope != "inventory":
+        return base
+    is_source = base.model is Source
+    prefix = "" if is_source else "source__"
+    extra = [Col(f"{prefix}comment", "Commentaire" if is_source else "Commentaire source", visible=is_source, width=220)]
+    annotations = {}
+    for cf in CustomField.objects.all():
+        name = f"cf_{cf.key}"
+        annotations[name] = KeyTextTransform(cf.key, f"{prefix}custom")
+        extra.append(Col(name, cf.label, "choice" if cf.kind == "choice" else "text", visible=cf.visible))
+    cols = list(base.columns)
+    pos = 3 if is_source else next((i + 1 for i, c in enumerate(cols) if c.field == "source__platform"), 1)
+    return replace(base, columns=cols[:pos] + extra + cols[pos:], annotations=annotations)
+
+
+# --- Filtres croisés entre vues -------------------------------------------------
+# Pour chaque vue : quels filtres liés elle accepte, et comment ils s'appliquent.
+LINK_FILTERS = {
+    "sources": [],
+    "clusters": ["cluster", "host", "vm"],
+    "hosts": ["cluster", "host", "datastore", "vm"],
+    "datastores": ["cluster", "host", "datastore", "vm"],
+    "vms": ["cluster", "host", "datastore", "vm"],
+    "switches": ["host"],
+    "portgroups": ["host"],
+    "neighbors": ["cluster", "host"],
+}
+LINK_LABELS = {"source": "vCenter / Proxmox", "cluster": "Clusters", "host": "Hôtes", "datastore": "Datastores", "vm": "VM"}
+
+
+def getlist(params, key):
+    values = params.getlist(key) if hasattr(params, "getlist") else params.get(key, [])
+    if isinstance(values, str):
+        values = [values]
+    return [v for v in values if v not in ("", None)]
+
+
+def _pairs(values):
+    """'12:nom' → (12, 'nom'). Les noms sont qualifiés par leur source : deux vCenter peuvent avoir un « Cluster01 »."""
+    out = []
+    for v in values:
+        sid, sep, name = str(v).partition(":")
+        if sep and sid.isdigit() and name:
+            out.append((int(sid), name))
+    return out[:200]
+
+
+def _or(conds):
+    q = Q(pk__in=[])
+    for c in conds:
+        q |= c
+    return q
+
+
+def _link(kind, **kw):
+    return Exists(InventoryLink.objects.filter(kind=kind, **kw))
+
+
+def _apply_links(grid, qs, params):
+    allowed = LINK_FILTERS.get(grid.key, [])
+    clusters = _pairs(getlist(params, "cluster")) if "cluster" in allowed else []
+    hosts = _pairs(getlist(params, "host")) if "host" in allowed else []
+    dss = _pairs(getlist(params, "datastore")) if "datastore" in allowed else []
+    vm = (params.get("vm") or "").strip() if "vm" in allowed else ""
+    k = grid.key
+
+    if clusters:
+        if k == "clusters":
+            qs = qs.filter(_or(Q(source_id=s, name=n) for s, n in clusters))
+        elif k in ("hosts", "vms", "neighbors"):
+            qs = qs.filter(_or(Q(source_id=s, cluster_name=n) for s, n in clusters))
+        elif k == "datastores":
+            qs = qs.filter(_or(
+                Q(source_id=s) & _link("host_ds", source_id=s, right_name=OuterRef("name"),
+                                       left_name__in=Host.objects.filter(source_id=s, cluster_name=n).values("name"))
+                for s, n in clusters))
+    if hosts:
+        if k == "hosts":
+            qs = qs.filter(_or(Q(source_id=s, name=n) for s, n in hosts))
+        elif k == "neighbors":
+            qs = qs.filter(_or(Q(source_id=s, name=n) for s, n in hosts))
+        elif k in ("vms", "switches", "portgroups"):
+            qs = qs.filter(_or(Q(source_id=s, host_name=n) for s, n in hosts))
+        elif k == "clusters":
+            qs = qs.filter(_or(
+                Q(source_id=s, name__in=Host.objects.filter(source_id=s, name=n).values("cluster_name")) for s, n in hosts))
+        elif k == "datastores":
+            qs = qs.filter(_or(
+                Q(source_id=s) & (Q(node="") | Q(node=n)) & _link("host_ds", source_id=s, left_name=n, right_name=OuterRef("name"))
+                for s, n in hosts))
+    if dss:
+        if k == "datastores":
+            qs = qs.filter(_or(Q(source_id=s, name=n) for s, n in dss))
+        elif k == "hosts":
+            qs = qs.filter(_or(
+                Q(source_id=s) & _link("host_ds", source_id=s, right_name=n, left_name=OuterRef("name")) for s, n in dss))
+        elif k == "vms":
+            qs = qs.filter(_or(
+                Q(source_id=s) & _link("vm_ds", source_id=s, right_name=n, left_moid=OuterRef("moid")) for s, n in dss))
+    if vm:
+        if k == "vms":
+            qs = qs.filter(name__icontains=vm)
+        elif k == "datastores":
+            qs = qs.filter(_link("vm_ds", source_id=OuterRef("source_id"), right_name=OuterRef("name"), left_name__icontains=vm))
+        elif k in ("hosts", "clusters"):
+            field_name = "host_name" if k == "hosts" else "cluster_name"
+            qs = qs.filter(Exists(VirtualMachine.objects.filter(
+                source_id=OuterRef("source_id"), name__icontains=vm, **{field_name: OuterRef("name")})))
+    return qs
+
+
 def filtered_queryset(grid, params):
     qs = grid.model.objects.all()
     if grid.model in (StoragePool, StorageVolume):
         qs = qs.select_related("system")
     elif grid.model not in (Source, StorageSystem):
         qs = qs.select_related("source")
+    if grid.annotations:
+        qs = qs.annotate(**grid.annotations)
     platform = params.get("platform")
     if platform in ("vmware", "proxmox") and grid.platform_field:
         qs = qs.filter(**{grid.platform_field: platform})
-    source_id = str(params.get("source") or "")
-    if source_id.isdigit():
+    source_ids = [int(v) for raw in getlist(params, "source") for v in str(raw).split(",") if v.strip().isdigit()]
+    if source_ids:
         if grid.model in (Source, StorageSystem):
-            qs = qs.filter(pk=source_id)
+            qs = qs.filter(pk__in=source_ids)
         elif grid.scope == "storage":
-            qs = qs.filter(system_id=source_id)
+            qs = qs.filter(system_id__in=source_ids)
         else:
-            qs = qs.filter(source_id=source_id)
+            qs = qs.filter(source_id__in=source_ids)
+    if grid.scope == "inventory":
+        for name in grid.annotations:  # champs personnalisés : cf_<clé>=valeur (répétable)
+            wanted = getlist(params, name)
+            if wanted:
+                cond = Q(**{f"{name}__in": [w for w in wanted if w != "(vide)"]})
+                if "(vide)" in wanted:
+                    cond |= Q(**{f"{name}__isnull": True}) | Q(**{name: ""})
+                qs = qs.filter(cond)
+        qs = _apply_links(grid, qs, params)
     q = (params.get("q") or "").strip()
     if q:
         cond = Q()
         for c in grid.columns:
-            if c.type in ("text", "status", "platform"):
+            if c.type in ("text", "status", "platform", "choice"):
                 cond |= Q(**{f"{c.field}__icontains": q})
         qs = qs.filter(cond)
     for f in _parse_indexed(params, "filter"):
@@ -433,3 +562,45 @@ def filtered_queryset(grid, params):
             order.append(("-" if srt.get("dir") == "desc" else "") + col.field)
     qs = qs.order_by(*(order or [grid.default_sort]), "pk")
     return qs
+
+
+# --- Listes de choix des filtres (cascade : source → cluster → hôte) ---------------
+def filter_options(kind, params, limit=200):
+    q = (params.get("q") or "").strip()
+    platform = params.get("platform")
+    source_ids = [int(v) for raw in getlist(params, "source") for v in str(raw).split(",") if v.strip().isdigit()]
+
+    def scoped(qs):
+        if platform in ("vmware", "proxmox"):
+            qs = qs.filter(source__platform=platform)
+        if source_ids:
+            qs = qs.filter(source_id__in=source_ids)
+        if q:
+            qs = qs.filter(name__icontains=q)
+        return qs
+
+    if kind == "source":
+        qs = Source.objects.all()
+        if platform in ("vmware", "proxmox"):
+            qs = qs.filter(platform=platform)
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(comment__icontains=q) | Q(site__icontains=q))
+        return [{"value": str(s.pk), "label": s.name, "hint": s.comment[:60]} for s in qs.only("id", "name", "comment")[:limit]]
+    if kind in ("cluster", "host", "datastore"):
+        model = {"cluster": Cluster, "host": Host, "datastore": Datastore}[kind]
+        qs = scoped(model.objects.all())
+        if kind == "host":
+            clusters = _pairs(getlist(params, "cluster"))
+            if clusters:
+                qs = qs.filter(_or(Q(source_id=s, cluster_name=n) for s, n in clusters))
+        rows = qs.values_list("source_id", "name", "source__name").distinct().order_by("name", "source__name")[:limit]
+        return [{"value": f"{sid}:{name}", "label": name, "hint": src} for sid, name, src in rows]
+    if kind.startswith("cf_"):
+        cf = CustomField.objects.filter(key=kind[3:]).first()
+        if cf is None:
+            return []
+        values = set(cf.choice_list())
+        values.update(v for v in Source.objects.values_list(KeyTextTransform(cf.key, "custom"), flat=True) if v)
+        out = sorted(v for v in values if not q or q.lower() in v.lower())[:limit]
+        return [{"value": v, "label": v} for v in out] + [{"value": "(vide)", "label": "(non renseigné)"}]
+    return []

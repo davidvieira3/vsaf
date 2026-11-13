@@ -19,10 +19,12 @@
     <button type="button" data-platform="proxmox" aria-pressed="false">Proxmox</button>
   </div>
   {% endif %}
-  <select id="grid-source" aria-label="Limiter à une source">
-    <option value="">{% if grid.scope == "storage" %}Toutes les baies{% else %}Toutes les sources{% endif %}</option>
+  {% if storage %}
+  <select id="grid-source" aria-label="Limiter à une baie">
+    <option value="">Toutes les baies</option>
     {% for s in sources %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}
   </select>
+  {% endif %}
   <div class="grow"><input id="grid-search" type="search" placeholder="Rechercher dans toutes les colonnes texte" aria-label="Rechercher"></div>
   <div class="popover">
     <button class="btn" id="columns-btn" type="button" aria-expanded="false" aria-controls="columns-panel">Colonnes</button>
@@ -30,7 +32,15 @@
   </div>
   <button class="btn" id="grid-reset" type="button">Effacer les filtres</button>
 </div>
-<p class="hint">Filtres de colonne : texte libre, <code>=valeur</code> pour l'égalité exacte, <code>!valeur</code> pour exclure ; sur les nombres <code>&gt;4</code>, <code>&lt;=1,2</code>, <code>&gt;500G</code>. Cliquez sur une ligne pour voir toutes ses propriétés.</p>
+{% if not storage %}
+<div class="toolbar linkbar">
+  <span class="hint">Filtrer par</span>
+  <div id="pickers" class="pickers"></div>
+  {% if config.vmFilter %}<input id="grid-vm" type="search" placeholder="Nom de VM contient…" aria-label="Filtrer par nom de VM">{% endif %}
+</div>
+<div id="active-filters" class="chips" aria-live="polite"></div>
+{% endif %}
+<p class="hint">Filtres de colonne : texte libre, <code>=valeur</code> pour l'égalité exacte, <code>!valeur</code> pour exclure ; sur les nombres <code>&gt;4</code>, <code>&lt;=1,2</code>, <code>&gt;500G</code>. Cliquez sur une ligne pour voir ses propriétés et ouvrir les vues liées. L'adresse de la page reflète les filtres : elle se partage telle quelle.</p>
 <div id="grid"></div>
 
 <aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="drawer-title">

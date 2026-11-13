@@ -6,7 +6,7 @@ from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
-from .grids import GRIDS, filtered_queryset
+from .grids import filtered_queryset, resolve_grid
 
 GIB = 1024**3
 
@@ -22,6 +22,8 @@ def _value(col, v):
         return timezone.localtime(v).replace(tzinfo=None)
     if col.type == "bool":
         return "Oui" if v else "Non"
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@"):
+        return "'" + v  # un commentaire saisi par un utilisateur ne doit pas être interprété comme une formule
     return v
 
 
@@ -102,7 +104,7 @@ SHEETS = INVENTORY_SHEETS + STORAGE_SHEETS
 def build_workbook(params, sheets=SHEETS):
     wb = new_workbook()
     for key, title in sheets:
-        _sheet(wb, GRIDS[key], params, title)
+        _sheet(wb, resolve_grid(key), params, title)
     return wb
 
 

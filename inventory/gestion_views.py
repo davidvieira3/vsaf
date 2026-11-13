@@ -18,9 +18,13 @@ from django.http import FileResponse, Http404
 
 from . import history
 from .cmdb import test_cmdb
-from .forms import CmdbConnectorForm, ConnectorForm, SettingsForm, SourceForm, SourceImportForm, StorageSystemForm
+from .forms import (
+    CmdbConnectorForm, ConnectorForm, CustomFieldForm, SettingsForm, SourceForm, SourceImportForm, StorageSystemForm,
+)
 from .hardware import FETCHERS
-from .models import CmdbConnector, CmdbRecord, CollectionRun, ExportFile, HardwareConnector, HardwareRecord, Source, StorageSystem
+from .models import (
+    CmdbConnector, CmdbRecord, CollectionRun, CustomField, ExportFile, HardwareConnector, HardwareRecord, Source, StorageSystem,
+)
 from .storage.sync import test_storage
 from .tasks import enqueue_cmdb, enqueue_connector, enqueue_source, enqueue_storage, manual_history
 
@@ -52,7 +56,7 @@ def source_edit(request, pk=None):
         return redirect("gestion:sources")
     groups = [
         ("Connexion", "", ["name", "platform", "host", "port", "username", "secret", "token_id", "verify_ssl"]),
-        ("Classement et collecte", "", ["site", "description", "enabled", "collect_interval_min", "collect_network_hints", "collect_vm_devices"]),
+        ("Classement et collecte", "", ["site", "description", "comment", "enabled", "collect_interval_min", "collect_network_hints", "collect_vm_devices"]),
         ("Proxmox : enrichissement matériel par SSH (facultatif)",
          "L'API Proxmox ne fournit ni numéro de série, ni IP du BMC, ni voisins LLDP. L'application peut les lire "
          "elle-même par SSH (dmidecode, ipmitool, lldpctl) avec un compte dédié.",
@@ -451,3 +455,78 @@ def history_delete(request, pk):
     export.delete()
     messages.success(request, "Fichier supprimé.")
     return redirect("gestion:history")
+
+
+# --- Commentaires et champs personnalisés des sources ------------------------------
+@role_required("operator")
+def annotations(request):
+    """Tableau unique pour commenter et catégoriser toutes les sources d'un coup."""
+    fields = list(CustomField.objects.all())
+    qs = Source.objects.all()
+    platform = request.GET.get("platform", "")
+    q = request.GET.get("q", "").strip()
+    if platform:
+        qs = qs.filter(platform=platform)
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(comment__icontains=q) | Q(site__icontains=q))
+    sources = list(qs)
+    if request.method == "POST":
+        changed = 0
+        for s in sources:
+            if f"c_{s.pk}" not in request.POST:
+                continue
+            comment = request.POST.get(f"c_{s.pk}", "").strip()[:2000]
+            custom = dict(s.custom or {})
+            for cf in fields:
+                value = request.POST.get(f"f_{s.pk}_{cf.key}", "").strip()[:255]
+                if cf.kind == "choice" and value and value not in cf.choice_list():
+                    value = custom.get(cf.key, "")  # valeur hors liste : on garde l'ancienne
+                if value:
+                    custom[cf.key] = value
+                else:
+                    custom.pop(cf.key, None)
+            if comment != s.comment or custom != (s.custom or {}):
+                s.comment, s.custom = comment, custom
+                s.save(update_fields=["comment", "custom"])
+                changed += 1
+        audit(request, "annotations-save", detail=f"{changed} source(s) modifiée(s)")
+        messages.success(request, f"{changed} source(s) mise(s) à jour.")
+        return redirect(request.get_full_path())
+    rows = [
+        {"source": s, "cells": [{"field": cf, "value": (s.custom or {}).get(cf.key, ""), "name": f"f_{s.pk}_{cf.key}"} for cf in fields]}
+        for s in sources
+    ]
+    return render(request, "gestion/annotations.html", {"rows": rows, "fields": fields, "platform": platform, "q": q})
+
+
+@role_required("admin")
+def fields_list(request):
+    return render(request, "gestion/fields_list.html", {"fields": CustomField.objects.all()})
+
+
+@role_required("admin")
+def field_edit(request, pk=None):
+    cf = get_object_or_404(CustomField, pk=pk) if pk else None
+    form = CustomFieldForm(request.POST or None, instance=cf)
+    if request.method == "POST" and form.is_valid():
+        obj = form.save()
+        audit(request, "customfield-save", obj.key)
+        messages.success(request, f"Champ « {obj.label} » enregistré. Il apparaît comme colonne et comme filtre dans toutes les vues.")
+        return redirect("gestion:fields")
+    return render(request, "gestion/form.html", {"form": form, "title": cf and f"Champ {cf.label}" or "Nouveau champ personnalisé",
+                                                 "submit": "Enregistrer", "back": "gestion:fields"})
+
+
+@role_required("admin")
+@require_POST
+def field_delete(request, pk):
+    cf = get_object_or_404(CustomField, pk=pk)
+    with transaction.atomic():
+        for s in Source.objects.exclude(custom={}):
+            if cf.key in (s.custom or {}):
+                s.custom.pop(cf.key)
+                s.save(update_fields=["custom"])
+        cf.delete()
+    audit(request, "customfield-delete", cf.key)
+    messages.success(request, f"Champ « {cf.label} » supprimé, ainsi que ses valeurs.")
+    return redirect("gestion:fields")

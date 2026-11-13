@@ -23,6 +23,8 @@ class Source(models.Model):
     verify_ssl = models.BooleanField("Vérifier le certificat", default=True)
     site = models.CharField("Site / région", max_length=100, blank=True)
     description = models.CharField(max_length=255, blank=True)
+    comment = models.TextField("Commentaire", blank=True, help_text="Texte libre pour identifier la source (périmètre, client, contact...)")
+    custom = models.JSONField("Champs personnalisés", default=dict, blank=True)
     enabled = models.BooleanField("Collecte active", default=True)
     collect_interval_min = models.PositiveIntegerField("Intervalle (minutes)", default=240)
     collect_network_hints = models.BooleanField("Collecter CDP/LLDP", default=True)
@@ -382,166 +384,6 @@ class HardwareRecord(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
-class StorageConnector(models.Model):
-    """Accès en lecture seule à une baie (ou un cluster NetApp) via son API REST."""
-
-    KINDS = [
-        ("hpe_wsapi", "HPE 3PAR / Primera / Alletra 9000 / Alletra MP (WSAPI)"),
-        ("hpe_nimble", "HPE Alletra 5000 / 6000 / Nimble"),
-        ("netapp_ontap", "NetApp ONTAP 9.6+"),
-        ("pure_flasharray", "Pure Storage FlashArray (REST 2.x)"),
-    ]
-    DEFAULT_PORTS = {"hpe_wsapi": 443, "hpe_nimble": 5392, "netapp_ontap": 443, "pure_flasharray": 443}
-
-    name = models.CharField("Nom", max_length=100, unique=True)
-    kind = models.CharField("Type", max_length=32, choices=KINDS)
-    host = models.CharField("Adresse de gestion", max_length=255)
-    port = models.PositiveIntegerField(
-        null=True, blank=True, help_text="Vide = port par défaut (443 ; 5392 pour Alletra 5000/6000 ; 8080 pour un 3PAR ancien en HTTP)"
-    )
-    username = models.CharField("Compte", max_length=255, blank=True, help_text="Inutile pour Pure (jeton API)")
-    secret_enc = models.TextField(blank=True)
-    verify_ssl = models.BooleanField("Vérifier le certificat", default=False)
-    site = models.CharField("Site", max_length=100, blank=True)
-    enabled = models.BooleanField("Actif", default=True)
-    collect_volumes = models.BooleanField("Collecter les volumes / LUN", default=True)
-    collect_interval_min = models.PositiveIntegerField("Intervalle (minutes)", default=360)
-    last_status = models.CharField(max_length=16, blank=True)
-    last_run_at = models.DateTimeField(null=True, blank=True)
-    last_error = models.TextField(blank=True)
-    next_run_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
-
-    @property
-    def effective_port(self):
-        return self.port or self.DEFAULT_PORTS.get(self.kind, 443)
-
-    @property
-    def base_url(self):
-        return f"https://{self.host}:{self.effective_port}"
-
-    @property
-    def secret(self):
-        return decrypt(self.secret_enc)
-
-    @secret.setter
-    def secret(self, value):
-        self.secret_enc = encrypt(value)
-
-
-class StorageArray(models.Model):
-    connector = models.ForeignKey(StorageConnector, on_delete=models.CASCADE, related_name="arrays")
-    name = models.CharField(max_length=255, db_index=True)
-    vendor = models.CharField(max_length=64, blank=True)
-    family = models.CharField(max_length=64, blank=True)
-    model = models.CharField(max_length=128, blank=True)
-    serial = models.CharField(max_length=128, blank=True)
-    version = models.CharField(max_length=128, blank=True)
-    address = models.CharField(max_length=255, blank=True)
-    site = models.CharField(max_length=100, blank=True)
-    num_controllers = models.IntegerField(default=0)
-    num_pools = models.IntegerField(default=0)
-    num_volumes = models.IntegerField(default=0)
-    num_hosts = models.IntegerField(default=0)
-    capacity_bytes = models.BigIntegerField(default=0)
-    used_bytes = models.BigIntegerField(default=0)
-    free_bytes = models.BigIntegerField(default=0)
-    used_pct = models.FloatField(null=True, blank=True)
-    provisioned_bytes = models.BigIntegerField(default=0)
-    provisioned_pct = models.FloatField(null=True, blank=True)
-    data_reduction = models.FloatField(null=True, blank=True)
-    health = models.CharField(max_length=64, blank=True)
-    props = models.JSONField(default=dict, blank=True)
-    collected_at = models.DateTimeField(default=timezone.now)
-
-    class Meta:
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
-
-
-class StoragePool(models.Model):
-    """CPG (3PAR/Primera/Alletra 9000), pool (Alletra 6000/Nimble), agrégat (NetApp) ; la baie entière pour Pure."""
-
-    connector = models.ForeignKey(StorageConnector, on_delete=models.CASCADE, related_name="pools")
-    array = models.ForeignKey(StorageArray, on_delete=models.CASCADE, related_name="pools")
-    name = models.CharField(max_length=255, db_index=True)
-    kind = models.CharField(max_length=32, blank=True)
-    node = models.CharField(max_length=255, blank=True)
-    raid = models.CharField(max_length=64, blank=True)
-    capacity_bytes = models.BigIntegerField(default=0)
-    used_bytes = models.BigIntegerField(default=0)
-    free_bytes = models.BigIntegerField(default=0)
-    used_pct = models.FloatField(null=True, blank=True)
-    provisioned_bytes = models.BigIntegerField(default=0)
-    provisioned_pct = models.FloatField(null=True, blank=True)
-    data_reduction = models.FloatField(null=True, blank=True)
-    num_volumes = models.IntegerField(default=0)
-    state = models.CharField(max_length=64, blank=True)
-    props = models.JSONField(default=dict, blank=True)
-    collected_at = models.DateTimeField(default=timezone.now)
-
-    class Meta:
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
-
-
-class StorageVolume(models.Model):
-    connector = models.ForeignKey(StorageConnector, on_delete=models.CASCADE, related_name="volumes")
-    array = models.ForeignKey(StorageArray, on_delete=models.CASCADE, related_name="volumes")
-    name = models.CharField(max_length=500, db_index=True)
-    kind = models.CharField(max_length=32, blank=True)
-    pool = models.CharField(max_length=255, blank=True)
-    svm = models.CharField("SVM / domaine", max_length=255, blank=True)
-    size_bytes = models.BigIntegerField(default=0)
-    used_bytes = models.BigIntegerField(default=0)
-    used_pct = models.FloatField(null=True, blank=True)
-    thin = models.BooleanField(null=True)
-    state = models.CharField(max_length=64, blank=True)
-    naa = models.CharField("Identifiant NAA", max_length=64, blank=True, db_index=True)
-    serial = models.CharField(max_length=128, blank=True)
-    nas_path = models.CharField("Chemin NFS", max_length=500, blank=True)
-    hosts = models.TextField("Hôtes / groupes présentés", blank=True)
-    datastores = models.TextField("Datastores correspondants", blank=True)
-    props = models.JSONField(default=dict, blank=True)
-    collected_at = models.DateTimeField(default=timezone.now)
-
-    class Meta:
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
-
-
-class ExportArchive(models.Model):
-    """Classeur Excel horodaté conservé sur disque (historique des collectes)."""
-
-    KINDS = [("source", "Collecte d'une source"), ("storage", "Collecte d'une baie"), ("daily", "Inventaire complet quotidien")]
-    kind = models.CharField(max_length=16, choices=KINDS)
-    created_at = models.DateTimeField(default=timezone.now, db_index=True)
-    label = models.CharField(max_length=255)
-    source = models.ForeignKey(Source, null=True, blank=True, on_delete=models.SET_NULL, related_name="archives")
-    storage = models.ForeignKey(StorageConnector, null=True, blank=True, on_delete=models.SET_NULL, related_name="archives")
-    run = models.ForeignKey(CollectionRun, null=True, blank=True, on_delete=models.SET_NULL, related_name="archives")
-    relpath = models.CharField(max_length=500, unique=True)
-    size_bytes = models.BigIntegerField(default=0)
-    counts = models.JSONField(default=dict, blank=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return self.label
-
-
 # --- Baies de stockage --------------------------------------------------------
 class StorageSystem(models.Model):
     KINDS = [
@@ -746,3 +588,43 @@ class ExportFile(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+# --- Champs personnalisés et liens entre objets ----------------------------------
+class CustomField(models.Model):
+    """Champ personnalisé posé sur les sources (vCenter / Proxmox) et repris comme colonne et filtre dans toutes les vues."""
+
+    KINDS = [("text", "Texte libre"), ("choice", "Liste de valeurs")]
+    key = models.SlugField("Identifiant", max_length=32, unique=True,
+                           help_text="Minuscules, chiffres et _ (ex. environnement, client, criticite). Non modifiable ensuite.")
+    label = models.CharField("Libellé", max_length=64)
+    kind = models.CharField("Type", max_length=16, choices=KINDS, default="choice")
+    choices = models.TextField("Valeurs possibles", blank=True, help_text="Une valeur par ligne (type « liste de valeurs »)")
+    visible = models.BooleanField("Colonne affichée par défaut dans les vues", default=True)
+    order = models.PositiveIntegerField("Ordre", default=10)
+
+    class Meta:
+        ordering = ["order", "label"]
+
+    def __str__(self):
+        return self.label
+
+    def choice_list(self):
+        return [c.strip() for c in self.choices.splitlines() if c.strip()]
+
+
+class InventoryLink(models.Model):
+    """Relations collectées, utilisées par les filtres croisés : VM ↔ datastore et hôte ↔ datastore."""
+
+    source = models.ForeignKey(Source, on_delete=models.CASCADE, related_name="links")
+    kind = models.CharField(max_length=16)  # "vm_ds" | "host_ds"
+    left_moid = models.CharField(max_length=128, blank=True)
+    left_name = models.CharField(max_length=255)
+    right_name = models.CharField(max_length=255)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["source", "kind", "right_name"]),
+            models.Index(fields=["source", "kind", "left_name"]),
+            models.Index(fields=["source", "kind", "left_moid"]),
+        ]

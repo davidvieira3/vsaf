@@ -76,6 +76,7 @@ class ProxmoxCollector:
             with ThreadPoolExecutor(max_workers=8) as pool:
                 details = dict(pool.map(fetch, [g for g in guests if g.get("node")]))
 
+        links = []
         node_agg = VmAggregate()
         vms = []
         for gst in guests:
@@ -91,6 +92,8 @@ class ProxmoxCollector:
             nets = {k: v for k, v in cfg.items() if k.startswith("net") and k[3:].isdigit()}
             bridges = sorted({part.split("=", 1)[1] for v in nets.values() for part in str(v).split(",") if part.startswith("bridge=")})
             storages = sorted({str(cfg[k]).split(":", 1)[0] for k in disks if ":" in str(cfg[k])})
+            for st_name in storages:
+                links.append({"kind": "vm_ds", "left_moid": gst["id"], "left_name": s(gst.get("name") or gst["id"]), "right_name": st_name})
             vms.append({
                 "moid": gst["id"],
                 "name": s(gst.get("name") or gst["id"]),
@@ -278,6 +281,9 @@ class ProxmoxCollector:
         for vm in vms:
             for st_name in filter(None, vm["datastores"].split(", ")):
                 vm_per_storage[st_name] += 1
+        for r in storages_res:
+            if r.get("node") and r.get("storage"):
+                links.append({"kind": "host_ds", "left_name": r["node"], "right_name": r["storage"]})
         for name, entries in by_storage.items():
             cfg = storage_cfg.get(name, {})
             shared = bool(entries[0].get("shared")) or bool(cfg.get("shared"))
@@ -361,4 +367,5 @@ class ProxmoxCollector:
             "portgroups": portgroups,
             "neighbors": neighbors,
             "vms": vms,
+            "links": links,
         }, about
